@@ -1,0 +1,17 @@
+services:
+  slide-generator:
+    image: intunvace/slide-maker:${TAG:-latest}
+    build: .
+    container_name: slide-maker
+    ports:
+      - "8501:8501"
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+    networks:
+      - llm-network
+
+networks:
+  llm-network:
+    name: llm-network
+    driver: bridge
+    external: true

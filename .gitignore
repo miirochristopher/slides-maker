@@ -1,0 +1,107 @@
+# --------------------
+# Python
+# --------------------
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --------------------
+# Virtual Environments
+# --------------------
+env/
+venv/
+ENV/
+.venv/
+.python-version
+
+# --------------------
+# Distribution / Packaging
+# --------------------
+build/
+dist/
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+wheels/
+share/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# --------------------
+# Installer logs
+# --------------------
+pip-log.txt
+pip-delete-this-directory.txt
+
+# --------------------
+# Unit test / coverage reports
+# --------------------
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+pytest_cache/
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+
+# --------------------
+# Logs & runtime files
+# --------------------
+*.log
+*.pid
+*.seed
+
+# --------------------
+# Jupyter Notebook
+# --------------------
+.ipynb_checkpoints/
+
+# --------------------
+# IDEs & Editors
+# --------------------
+.vscode/
+.idea/
+.spyderproject
+.spyproject
+
+# --------------------
+# OS files
+# --------------------
+.DS_Store
+Thumbs.db
+
+# --------------------
+# Environment variables / secrets
+# --------------------
+.env
+.env.*
+*.key
+*.pem
+
+# --------------------
+# mypy / pyright
+# --------------------
+.mypy_cache/
+.pyre/
+.pytype/
+
+# --------------------
+# Poetry
+# --------------------
+poetry.lock
+
+# --------------------
+# Pipenv
+# --------------------
+Pipfile.lock
+
