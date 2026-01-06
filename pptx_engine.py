@@ -1,200 +1,242 @@
 from pptx import Presentation
 from pptx.util import Inches, Pt
-from pptx.enum.text import PP_ALIGN
 from pptx.dml.color import RGBColor
 from dataclasses import dataclass, field
-from typing import List, Optional
 import random
 import re
 
+# ------------------------------
+# Branding
+# ------------------------------
 
-# --------------------------------------------------
-# Color Utilities
-# --------------------------------------------------
-
-def random_hex_color(min_val=40, max_val=200) -> str:
-    """
-    Generates a readable random HEX color (no extremes).
-    """
+def random_hex_color(min_val=40, max_val=200):
     return "{:02X}{:02X}{:02X}".format(
         random.randint(min_val, max_val),
         random.randint(min_val, max_val),
         random.randint(min_val, max_val),
     )
 
-
-def hex_to_rgb(hex_color: str) -> RGBColor:
-    return RGBColor.from_string(hex_color.replace("#", ""))
-
-
-# --------------------------------------------------
-# Data Models
-# --------------------------------------------------
-
 @dataclass
 class Branding:
-    logo_path: Optional[str] = None
-    brand_text: Optional[str] = None
-
+    logo_path: str | None = None
+    brand_text: str | None = None  # REAL lecture title
     primary_color: str = field(default_factory=random_hex_color)
     accent_color: str = field(default_factory=random_hex_color)
     background_color: str = field(default_factory=lambda: random_hex_color(220, 255))
 
+# ------------------------------
+# Models
+# ------------------------------
 
 @dataclass
 class SlideContent:
     title: str
-    bullets: List[str]
+    lines: list[str]
 
+# ------------------------------
+# Parser (Faithful)
+# ------------------------------
 
-# --------------------------------------------------
-# Slide Utilities (SAFE)
-# --------------------------------------------------
-
-def clear_shape_text(shape):
-    if shape.has_text_frame:
-        shape.text_frame.clear()
-
-
-def clear_slide(slide):
-    for shape in slide.shapes:
-        clear_shape_text(shape)
-
-
-def apply_background(slide, hex_color: str):
-    fill = slide.background.fill
-    fill.solid()
-    fill.fore_color.rgb = hex_to_rgb(hex_color)
-
-
-# --------------------------------------------------
-# Faithful Text Parser
-# --------------------------------------------------
-
-def parse_faithful_text(raw_text: str) -> List[SlideContent]:
+def parse_faithful_notes(text: str) -> list[SlideContent]:
     slides = []
     current_title = None
-    bullets = []
+    buffer = []
 
-    for line in raw_text.splitlines():
+    for line in text.splitlines():
         line = line.strip()
+        if not line:
+            continue
 
-        if re.match(r"^Slide\s+\d+:", line):
+        if line.lower().startswith("slide"):
             if current_title:
-                slides.append(SlideContent(current_title, bullets))
-            current_title = line.split(":", 1)[1].strip()
-            bullets = []
-
-        elif line and not line.lower().startswith("presenter note"):
-            bullets.append(line)
+                slides.append(SlideContent(current_title, buffer))
+            current_title = line
+            buffer = []
+        elif not line.lower().startswith("presenter note"):
+            buffer.append(line)
 
     if current_title:
-        slides.append(SlideContent(current_title, bullets))
+        slides.append(SlideContent(current_title, buffer))
 
     return slides
 
+# ------------------------------
+# Utilities
+# ------------------------------
 
-# --------------------------------------------------
-# Slide Builders
-# --------------------------------------------------
+def clean_title(raw_title: str, lecture_title: str) -> str:
+    """
+    Rules:
+    - Slide 1: Title Slide -> lecture title
+    - Lecture X: Something -> Something
+    - Slide X: Something -> Something
+    """
+    if re.match(r"slide\s*1\s*:", raw_title, re.IGNORECASE):
+        return lecture_title
 
-def build_intro_slide(prs: Presentation, branding: Branding):
+    return re.sub(
+        r"^(slide\s*\d+\s*:|lecture\s*\d+\s*:)\s*",
+        "",
+        raw_title,
+        flags=re.IGNORECASE,
+    )
+
+def remove_all_shapes(slide):
+    spTree = slide.shapes._spTree
+    for shape in list(slide.shapes):
+        spTree.remove(shape._element)
+
+def apply_background(slide, hex_color):
+    if hex_color.upper() == "000000":
+        hex_color = "FFFFFF"
+    fill = slide.background.fill
+    fill.solid()
+    fill.fore_color.rgb = RGBColor.from_string(hex_color)
+
+def should_use_table(lines):
+    return len(lines) >= 2 and all(":" in l for l in lines)
+
+# ------------------------------
+# Renderers
+# ------------------------------
+
+def insert_title(slide, title):
+    box = slide.shapes.add_textbox(
+        Inches(1),
+        Inches(0.5),
+        Inches(8),
+        Inches(1.2),
+    )
+    tf = box.text_frame
+    tf.clear()
+
+    p = tf.paragraphs[0]
+    p.text = title
+    p.font.size = Pt(40)
+    p.font.bold = True
+    p.font.color.rgb = RGBColor(0, 0, 0)
+
+def insert_bullets(slide, lines, start_y=1.9):
+    """
+    Single-slide bullet renderer.
+    Auto-scales font size to avoid overflow.
+    """
+    bullet_icon = "•"
+    box_height = 5.0  # inches
+    max_font = 26
+    min_font = 16
+
+    line_count = max(len(lines), 1)
+    font_size = max(
+        min_font,
+        min(max_font, int((box_height * 72) / line_count) - 4),
+    )
+
+    box = slide.shapes.add_textbox(
+        Inches(1.2),
+        Inches(start_y),
+        Inches(7.6),
+        Inches(box_height),
+    )
+
+    tf = box.text_frame
+    tf.clear()
+    tf.word_wrap = True
+
+    for i, l in enumerate(lines):
+        p = tf.add_paragraph() if i > 0 else tf.paragraphs[0]
+        p.text = f"{bullet_icon}  {l}"
+        p.font.size = Pt(font_size)
+        p.font.color.rgb = RGBColor(0, 0, 0)
+        p.level = 0
+
+def insert_table(slide, lines):
+    data = []
+    for l in lines:
+        if ":" in l:
+            left, right = l.split(":", 1)
+            data.append((left.strip(), right.strip()))
+
+    if not data:
+        return
+
+    rows = len(data)
+    table = slide.shapes.add_table(
+        rows,
+        2,
+        Inches(1.2),
+        Inches(2.2),
+        Inches(7.6),
+        Inches(4),
+    ).table
+
+    for r, (l, v) in enumerate(data):
+        table.cell(r, 0).text = l
+        table.cell(r, 1).text = v
+        for c in (0, 1):
+            for p in table.cell(r, c).text_frame.paragraphs:
+                p.font.size = Pt(22)
+                p.font.color.rgb = RGBColor(0, 0, 0)
+
+# ------------------------------
+# Intro Slide
+# ------------------------------
+
+def build_intro_slide(prs, branding: Branding):
     slide = prs.slides.add_slide(prs.slide_layouts[0])
-    clear_slide(slide)
+    remove_all_shapes(slide)
     apply_background(slide, branding.background_color)
 
     if branding.logo_path:
         slide.shapes.add_picture(
             branding.logo_path,
-            left=Inches(3),
-            top=Inches(2),
-            width=Inches(4)
+            Inches(3),
+            Inches(2),
+            width=Inches(4),
         )
-    else:
-        title = slide.shapes.title
-        tf = title.text_frame
-        tf.clear()
 
-        p = tf.paragraphs[0]
-        p.text = branding.brand_text or ""
-        p.alignment = PP_ALIGN.CENTER
-        p.font.size = Pt(40)
-        p.font.bold = True
-        p.font.color.rgb = hex_to_rgb(branding.primary_color)
+# ------------------------------
+# Generator (Faithful, Stable)
+# ------------------------------
 
+def generate_pptx_faithful(template, notes, output, branding: Branding):
+    prs = Presentation(template)
+    slides = parse_faithful_notes(notes)
 
-def build_content_slide(
-    prs: Presentation,
-    slide_data: SlideContent,
-    branding: Branding
-):
-    slide = prs.slides.add_slide(prs.slide_layouts[1])
-    clear_slide(slide)
-    apply_background(slide, branding.background_color)
+    lecture_title = branding.brand_text or ""
 
-    # Title
-    title_shape = slide.shapes.title
-    tf = title_shape.text_frame
-    tf.clear()
-
-    title_p = tf.paragraphs[0]
-    title_p.text = slide_data.title
-    title_p.font.color.rgb = hex_to_rgb(branding.primary_color)
-
-    # Content
-    body = slide.placeholders[1]
-    tf = body.text_frame
-    tf.clear()
-
-    for i, bullet in enumerate(slide_data.bullets):
-        p = tf.add_paragraph() if i > 0 else tf.paragraphs[0]
-        p.text = bullet
-        p.level = 0
-        p.font.color.rgb = hex_to_rgb(branding.primary_color)
-
-
-# --------------------------------------------------
-# Main Generators
-# --------------------------------------------------
-
-def _clear_all_slides(prs: Presentation):
+    # Clear template slides
     while prs.slides:
         rId = prs.slides._sldIdLst[0].rId
         prs.part.drop_rel(rId)
         del prs.slides._sldIdLst[0]
 
-
-def generate_pptx_faithful(
-    formatting_pptx: str,
-    output_path: str,
-    raw_text: str,
-    branding: Branding
-):
-    prs = Presentation(formatting_pptx)
-    _clear_all_slides(prs)
-
-    slides = parse_faithful_text(raw_text)
-
+    # Intro slide (logo only)
     build_intro_slide(prs, branding)
 
     for slide_data in slides:
-        build_content_slide(prs, slide_data, branding)
+        raw_title = slide_data.title.strip()
+        title = clean_title(raw_title, lecture_title)
 
-    prs.save(output_path)
+        # Skip Slide 1 (intro already created)
+        if re.match(r"slide\s*1\s*:", raw_title, re.IGNORECASE):
+            continue
 
+        content_lines = slide_data.lines.copy()
 
-def generate_pptx(
-    formatting_pptx: str,
-    output_path: str,
-    slides: List[SlideContent],
-    branding: Branding
-):
-    prs = Presentation(formatting_pptx)
-    _clear_all_slides(prs)
+        # Fallback: no title → first content line
+        if not title and content_lines:
+            title = content_lines.pop(0)
 
-    build_intro_slide(prs, branding)
+        slide = prs.slides.add_slide(prs.slide_layouts[1])
+        remove_all_shapes(slide)
+        apply_background(slide, branding.background_color)
 
-    for slide in slides:
-        build_content_slide(prs, slide, branding)
+        insert_title(slide, title)
 
-    prs.save(output_path)
+        if should_use_table(content_lines):
+            insert_table(slide, content_lines)
+        else:
+            insert_bullets(slide, content_lines)
+
+    prs.save(output)
