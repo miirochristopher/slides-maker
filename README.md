@@ -1,117 +1,217 @@
 # SLIDES MAKER
 
-This application takes text, a brnad template and an potional layout template and it generates slides Using LLMs.
+**Slides Maker** is a professional slide generation tool that converts structured text into fully styled PowerPoint presentations (`.pptx`).
 
-1. How Template Combination Works
+It supports **strict curriculum-grade slide generation**, **template-driven styling**, and **optional AI assistance**, while guaranteeing **non-corrupt, standards-compliant PPTX output**.
 
-Template 1 – Branding
+---
+
+## ✨ Key Features
+
+- ✅ Generates **valid, non-corrupt `.pptx` files**
+- 🎨 Preserves **designer-defined PowerPoint styles**
+- 📚 **Faithful Mode** for exact lecture/curriculum slides
+- 🧠 Optional **LLM-assisted generation**
+- 🖼️ Logo or text-based branding
+- 🎯 Deterministic layout handling
+- 🌈 Dynamic branding colors (manual or auto-generated)
+
+---
+
+## 🧩 How Template Usage Works
+
+Slides Maker uses a **single formatting template** as the authoritative source of layout and style.
+
+> ⚠️ Only one PPTX template is required and accepted.
+
+### Formatting Template (Required)
 
 Used for:
 
-Theme
+- Fonts
+- Colors
+- Bullet styles
+- Spacing
+- Placeholder positioning
+- Visual hierarchy
 
-Logo
+**Important behavior:**
 
-Footer
+- All text inside the template is **cleared**
+- Only **styles and layouts** are preserved
+- New content is injected safely (no appending)
 
-Colors
+This guarantees:
 
-Fonts
+- No duplicated text
+- No PPTX corruption
+- Perfect style preservation
 
-Template 2 – Layout
+---
 
-Used for:
+## 🎨 Branding Handling (No Branding PPTX)
 
-Placeholder positions
+Branding is handled dynamically
 
-Title/body layout
+### Branding Options
 
-Visual balance
+- **Logo image** (`PNG`, `JPG`, `JPEG`)
+- **OR** brand text (centered on intro slide)
+- **Three colors**:
 
-Result:
+  - Primary
+  - Accent
+  - Background
 
-Brand identity + structured layout + AI-generated content in one slide
+If colors are not provided, the system generates **readable random HEX colors** automatically.
 
-2. “Faithful Mode”
+The **intro slide contains only branding**, nothing else.
 
-Purpose:
+---
 
-Generate slides exactly as written in the input notes. No summarization, rephrasing, or LLM interpretation. Perfect for curriculum content, lectures, or strict teaching material.
+## 🧠 Faithful Mode (Exact Slide Generation)
 
-Behavior:
+### Purpose
 
-Slide titles = exactly from notes
+Faithful Mode is designed for **strict educational and curriculum content** where accuracy matters.
 
-Bullet points = exactly as written
+No summarization.
+No paraphrasing.
+No creative interpretation.
 
-Presenter notes = preserved verbatim
+Perfect for:
 
-Slide order = preserved
+- Lectures
+- Training material
+- Academic content
+- Compliance documentation
 
-LLM = optional (used only for minor validation or ignored completely)
+---
 
-## Requirements and local build instruction
+### Behavior
 
-Install python3
+When **Faithful Mode is enabled**:
 
-## For Debian/Ubuntu-based systems
+- Slide titles → **exactly as written**
+- Bullet points → **exactly as written**
+- Slide order → **preserved**
+- Presenter notes → **preserved verbatim**
+- LLM → **optional or completely bypassed**
 
-```
+The system **parses the text deterministically** instead of relying on AI to interpret structure.
+
+---
+
+## 🤖 AI Mode (Optional)
+
+When Faithful Mode is disabled:
+
+- The input prompt may be interpreted
+- Slides can be summarized or structured
+- An LLM (via Ollama) can assist in content generation
+
+> AI is **never required** for Faithful Mode.
+
+---
+
+## 🛠 Requirements
+
+- Python **3.9+**
+- PowerPoint-compatible OS (any)
+- Optional: Ollama (for AI mode only)
+
+---
+
+## 🔧 Local Build Instructions
+
+### Install Python (Debian / Ubuntu / Mint / PopOS)
+
+```bash
 sudo apt update
-sudo apt install python3 python3-venv
+sudo apt install python3 python3-venv python3-tk
 ```
 
-## Ubuntu / Debian / PopOS / Mint
+### Fedora
 
-```
-sudo apt update
-sudo apt install python3-tk
-```
-
-## For Fedora-based systems
-
-```
+```bash
 sudo dnf install python3 python3-venv
 ```
 
-## Clone this repository
+---
 
-Create a virtual environment using the venv module. This command creates a new directory (commonly named .venv or env) that contains an isolated Python installation:
+## 📦 Clone Repository
 
-```
+```bash
+git clone <your-repo-url>
 cd slides-maker
+```
 
+---
+
+## 🧪 Create Virtual Environment
+
+```bash
 python3 -m venv .venv
 ```
 
-## Activate the virtual environment.
+### Activate Environment
 
-```
+```bash
 source .venv/bin/activate
 ```
 
-## Install packages using pip.
+---
 
-The packages will be installed into your isolated environment, not the system's Python:
+## 📥 Install Dependencies
 
-```
+```bash
 pip install streamlit python-pptx requests
 ```
 
-## Run Application
+---
 
-To run this application locally, you need to setup [Ollama](https://github.com/intuvance/ollama-expertsystem)
+## ▶️ Run Locally
 
-# Run locally
-
-```
+```bash
 streamlit run app.py
 ```
 
-echo "paradygm-storage db-storage certs certbot" | xargs -n 1 docker volume create
+The application will open in your browser.
 
-# Using docker compose
+---
 
-```
+## 🤖 Optional: AI Setup (Ollama)
+
+AI generation requires Ollama.
+
+Follow setup instructions here:
+👉 [https://github.com/intuvance/ollama-expertsystem](https://github.com/intuvance/ollama-expertsystem)
+
+Ensure the model you want (e.g. `llama3.x`) is pulled and running.
+
+---
+
+## 🐳 Docker Support
+
+### Run with Docker Compose
+
+```bash
 docker compose up --build -d
 ```
+
+---
+
+## 🧑‍🎨 Template Authoring Guidelines (Summary)
+
+Designers should:
+
+- Use **Slide Master layouts**
+- Use **placeholders**, not text boxes
+- Define bullet styles in the master
+- Avoid animations or sample text
+- Keep layout indices consistent:
+
+  - Layout 0 → Intro
+  - Layout 1 → Title + Content
+
+All text will be replaced at runtime.
