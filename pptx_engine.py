@@ -4,6 +4,36 @@ from pptx.dml.color import RGBColor
 from dataclasses import dataclass, field
 import random
 import re
+import os
+
+# ------------------------------
+# Icon Configuration
+# ------------------------------
+
+ICON_DIR = "icons"
+
+ICON_MAP = {
+    "title": "computer.png",
+    "list": "arrow.png",
+    "table": "folder.png",
+}
+
+def icon_path(name: str) -> str | None:
+    path = os.path.join(ICON_DIR, ICON_MAP.get(name, ""))
+    return path if os.path.exists(path) else None
+
+
+def insert_icon(slide, name, left, top, size=0.4):
+    path = icon_path(name)
+    if not path:
+        return
+    slide.shapes.add_picture(
+        path,
+        Inches(left),
+        Inches(top),
+        width=Inches(size),
+        height=Inches(size),
+    )
 
 # ------------------------------
 # Branding
@@ -19,7 +49,7 @@ def random_hex_color(min_val=40, max_val=200):
 @dataclass
 class Branding:
     logo_path: str | None = None
-    brand_text: str | None = None  # REAL lecture title
+    brand_text: str | None = None
     primary_color: str = field(default_factory=random_hex_color)
     accent_color: str = field(default_factory=random_hex_color)
     background_color: str = field(default_factory=lambda: random_hex_color(220, 255))
@@ -42,17 +72,24 @@ def parse_faithful_notes(text: str) -> list[SlideContent]:
     current_title = None
     buffer = []
 
+    slide_header_pattern = re.compile(
+        r"""^.*?(slide|lecture)\s*\d+(\s*[:—-]\s*.*)?$""",
+        re.IGNORECASE,
+    )
+
     for line in text.splitlines():
-        line = line.strip()
+        line = line.rstrip()
         if not line:
             continue
+        if line.lower().startswith("presenter note"):
+            continue
 
-        if line.lower().startswith("slide"):
+        if slide_header_pattern.match(line):
             if current_title:
                 slides.append(SlideContent(current_title, buffer))
             current_title = line
             buffer = []
-        elif not line.lower().startswith("presenter note"):
+        else:
             buffer.append(line)
 
     if current_title:
@@ -65,17 +102,11 @@ def parse_faithful_notes(text: str) -> list[SlideContent]:
 # ------------------------------
 
 def clean_title(raw_title: str, lecture_title: str) -> str:
-    """
-    Rules:
-    - Slide 1: Title Slide -> lecture title
-    - Lecture X: Something -> Something
-    - Slide X: Something -> Something
-    """
     if re.match(r"slide\s*1\s*:", raw_title, re.IGNORECASE):
         return lecture_title
 
     return re.sub(
-        r"^(slide\s*\d+\s*:|lecture\s*\d+\s*:)\s*",
+        r"^(slide|lecture)\s*\d+\s*[:—-]?\s*",
         "",
         raw_title,
         flags=re.IGNORECASE,
@@ -97,14 +128,40 @@ def should_use_table(lines):
     return len(lines) >= 2 and all(":" in l for l in lines)
 
 # ------------------------------
+# Code Detection
+# ------------------------------
+
+CODE_PATTERNS = re.compile(
+    r"""
+    (<html|</|<!DOCTYPE|
+     \{|\}|;
+     ^def\s|^class\s|import\s|
+     console\.log|function\s|
+     =>|
+     public\s+class|
+     System\.out\.println|
+     useState\(|useEffect\()
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
+
+def is_code_block(lines: list[str]) -> bool:
+    if not lines:
+        return False
+    code_like = sum(1 for l in lines if CODE_PATTERNS.search(l))
+    return code_like >= max(2, len(lines) // 2)
+
+# ------------------------------
 # Renderers
 # ------------------------------
 
 def insert_title(slide, title):
+    insert_icon(slide, "title", 0.6, 0.55)
+
     box = slide.shapes.add_textbox(
-        Inches(1),
+        Inches(1.1),
         Inches(0.5),
-        Inches(8),
+        Inches(7.9),
         Inches(1.2),
     )
     tf = box.text_frame
@@ -116,41 +173,50 @@ def insert_title(slide, title):
     p.font.bold = True
     p.font.color.rgb = RGBColor(0, 0, 0)
 
-def insert_bullets(slide, lines, start_y=1.9):
-    """
-    Single-slide bullet renderer.
-    Auto-scales font size to avoid overflow.
-    """
-    bullet_icon = "•"
-    box_height = 5.0  # inches
-    max_font = 26
-    min_font = 16
-
-    line_count = max(len(lines), 1)
-    font_size = max(
-        min_font,
-        min(max_font, int((box_height * 72) / line_count) - 4),
-    )
+def insert_text(slide, lines, start_y=1.9):
+    insert_icon(slide, "list", 0.6, start_y)
 
     box = slide.shapes.add_textbox(
-        Inches(1.2),
+        Inches(1.1),
         Inches(start_y),
-        Inches(7.6),
-        Inches(box_height),
+        Inches(7.7),
+        Inches(5.0),
     )
 
     tf = box.text_frame
     tf.clear()
     tf.word_wrap = True
 
+    font_size = max(16, min(26, int((5 * 72) / max(len(lines), 1)) - 4))
+
     for i, l in enumerate(lines):
         p = tf.add_paragraph() if i > 0 else tf.paragraphs[0]
-        p.text = f"{bullet_icon}  {l}"
+        p.text = l
         p.font.size = Pt(font_size)
         p.font.color.rgb = RGBColor(0, 0, 0)
-        p.level = 0
+
+def insert_code(slide, lines):
+    box = slide.shapes.add_textbox(
+        Inches(0.8),
+        Inches(1.8),
+        Inches(8.4),
+        Inches(5.2),
+    )
+
+    tf = box.text_frame
+    tf.clear()
+    tf.word_wrap = False
+
+    for i, l in enumerate(lines):
+        p = tf.add_paragraph() if i > 0 else tf.paragraphs[0]
+        p.text = l
+        p.font.name = "Consolas"
+        p.font.size = Pt(16)
+        p.font.color.rgb = RGBColor(30, 30, 30)
 
 def insert_table(slide, lines):
+    insert_icon(slide, "table", 0.6, 2.2)
+
     data = []
     for l in lines:
         if ":" in l:
@@ -160,13 +226,12 @@ def insert_table(slide, lines):
     if not data:
         return
 
-    rows = len(data)
     table = slide.shapes.add_table(
-        rows,
+        len(data),
         2,
-        Inches(1.2),
+        Inches(1.1),
         Inches(2.2),
-        Inches(7.6),
+        Inches(7.7),
         Inches(4),
     ).table
 
@@ -176,7 +241,6 @@ def insert_table(slide, lines):
         for c in (0, 1):
             for p in table.cell(r, c).text_frame.paragraphs:
                 p.font.size = Pt(22)
-                p.font.color.rgb = RGBColor(0, 0, 0)
 
 # ------------------------------
 # Intro Slide
@@ -205,26 +269,22 @@ def generate_pptx_faithful(template, notes, output, branding: Branding):
 
     lecture_title = branding.brand_text or ""
 
-    # Clear template slides
     while prs.slides:
         rId = prs.slides._sldIdLst[0].rId
         prs.part.drop_rel(rId)
         del prs.slides._sldIdLst[0]
 
-    # Intro slide (logo only)
     build_intro_slide(prs, branding)
 
     for slide_data in slides:
         raw_title = slide_data.title.strip()
         title = clean_title(raw_title, lecture_title)
 
-        # Skip Slide 1 (intro already created)
         if re.match(r"slide\s*1\s*:", raw_title, re.IGNORECASE):
             continue
 
         content_lines = slide_data.lines.copy()
 
-        # Fallback: no title → first content line
         if not title and content_lines:
             title = content_lines.pop(0)
 
@@ -234,9 +294,11 @@ def generate_pptx_faithful(template, notes, output, branding: Branding):
 
         insert_title(slide, title)
 
-        if should_use_table(content_lines):
+        if is_code_block(content_lines):
+            insert_code(slide, content_lines)
+        elif should_use_table(content_lines):
             insert_table(slide, content_lines)
         else:
-            insert_bullets(slide, content_lines)
+            insert_text(slide, content_lines)
 
     prs.save(output)
